@@ -6,7 +6,3 @@ start_keyboard_inline = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='Удалить заметку', callback_data='delete')]
 ])
 
-kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Сок', callback_data='juice')],
-    [InlineKeyboardButton(text='Чай', callback_data='tea')]
-])

@@ -5,7 +5,6 @@ from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 from data import notes
-from keyboard import reply_kb
 from keyboard.inline_kb import start_keyboard_inline, kb
 from states.state_bot import NoteStates
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
