@@ -1,20 +1,20 @@
-from ftplib import all_errors
-
 from aiogram import Router, F
+from aiogram.dispatcher.middlewares import data
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
-from data import notes
-from keyboard.inline_kb import start_keyboard_inline, kb
+from keyboard.inline_kb import start_keyboard_inline
 from states.state_bot import NoteStates
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from data.note_data import  save_data, load_data
+import datetime
+
 
 router = Router()
 
-# Старт бота (сброс состояния)
 @router.message(Command("start"))
 async def start(message: Message, state: FSMContext):
-    await state.clear()  # Сброс всех состояний
+    await state.clear()
     await message.answer(
         "Выберите действие:",
          reply_markup=start_keyboard_inline)
@@ -29,44 +29,63 @@ async def add_note_start(cb: CallbackQuery, state: FSMContext):
 
 @router.message(NoteStates.AddNote)
 async def save_note(message: Message, state: FSMContext):
+    user_id = message.from_user.id
     note_text = message.text
-    notes.append(note_text)
-    # Здесь можно сохранить заметку (например, в словарь или БД)
-    # await state.update_data(last_note=note_text)  # Сохраняем временно в FSM, нужно сохранить в бд
+    current_time = datetime.datetime.now()
+    note = load_data()
+    if user_id in data:
+        note[user_id].append({current_time: note_text})
+    else:
+        note[user_id] = [{current_time: note_text}]
+    save_data(note)
     await message.answer(f"Заметка сохранена:\n\n{note_text}")
-    await state.set_state(NoteStates.Start)  # Возврат в начальное состояние
+    await state.set_state(NoteStates.Start)
     await message.answer("Выберите действие:", reply_markup=start_keyboard_inline)
 
 
 @router.callback_query(F.data == 'show', NoteStates.Start)
 async def show_notes(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
-
+    user_id = cb.from_user.id
+    note = load_data()
     # Здесь должен быть код для получения заметок из БД/хранилища
-    if not notes:
+    if not note[user_id]:
         await cb.message.answer("📭 У вас пока нет заметок.")
     else:
         await cb.message.answer(
-            "📋 Ваши заметки:\n\n" + "\n".join(f"• {note}" for note in notes)
+            "📋 Ваши заметки:\n\n" + "\n".join(f"• {note}" for user_note in note[user_id])
         )
 
     await cb.message.answer("Выберите действие:", reply_markup=start_keyboard_inline)
 
 
 @router.callback_query(F.data == 'delete', NoteStates.Start)
-async def select_notes_to_delete(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-
-    if not notes:
-        await callback.message.answer("📭 У вас пока нет заметок.")
+async def select_notes_to_delete(cb: CallbackQuery, state: FSMContext):
+    await cb.answer()
+    user_id = cb.from_user.id
+    note = load_data()
+    if not note[user_id]:
+        await cb.message.answer("📭 У вас пока нет заметок.")
         return
-
+    user_data = note[user_id]
     buttons = []
-    for index, note in enumerate(notes):
-        note_preview = ' '.join(note.split()[:3])
-        if len(note.split()) > 3:
-            note_preview += " ..."
+    for index, note_data in enumerate(user_data, start=1):
+        # Обрабатываем структуру данных {timestamp: note_text}
+        note_text = list(note_data.values())[0] if isinstance(note_data, dict) else str(note_data)
 
+        # Создаем превью заметки
+        words = note_text.split()
+        note_preview = ' '.join(words[:3])
+        if len(words) > 3:
+            note_preview += "..."
+
+        # Добавляем кнопку (индекс в callback_data делаем 0-based)
+        buttons.append(
+            InlineKeyboardButton(
+                text=f"{index}. {note_preview}",
+                callback_data=f"delete_note_{index - 1}"
+            )
+        )
         buttons.append(
             InlineKeyboardButton(
                 text=f"{index + 1}. {note_preview}",
@@ -76,31 +95,35 @@ async def select_notes_to_delete(callback: CallbackQuery, state: FSMContext):
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons[i:i + 2] for i in range(0, len(buttons), 2)])
     await state.set_state(NoteStates.DeleteNote)
-    await callback.message.answer(
+    await cb.message.answer(
         "Выберите заметку для удаления:",
         reply_markup=keyboard
     )
 
 
 @router.callback_query(NoteStates.DeleteNote)
-async def confirm_note_deletion(callback: CallbackQuery, state: FSMContext):
+async def confirm_note_deletion(cb: CallbackQuery, state: FSMContext):
+    await cb.answer()
+    note = load_data()
+    user_id = cb.from_user.id
+    user_notes = note[user_id]
     try:
-        # Извлекаем индекс из callback_data (формат "delete_note_0")
-        note_index = int(callback.data.split('_')[-1])
 
-        if 0 <= note_index < len(notes):
-            deleted_note = notes.pop(note_index)  # Удаляем выбранную заметку
-            await callback.message.answer(f"🗑 Заметка удалена:\n{deleted_note}")
+        note_index = int(cb.data.split('_')[-1])
+        if 0 <= note_index < len(user_notes):
+            deleted_note = note[user_id].pop(note_index)  # Удаляем выбранную заметку
+            save_data(note)
+            await cb.message.answer(f"🗑 Заметка удалена:\n{deleted_note}")
         else:
-            await callback.message.answer("⚠ Ошибка: заметка не найдена")
+            await cb.message.answer("⚠ Ошибка: заметка не найдена")
 
     except (ValueError, IndexError):
-        await callback.message.answer("⚠ Ошибка при обработке запроса")
+        await cb.message.answer("⚠ Ошибка при обработке запроса")
 
     # Всегда возвращаемся в начальное состояние после одного удаления
     await state.set_state(NoteStates.Start)
-    await callback.answer()
-    await callback.message.answer(
+    await cb.answer()
+    await cb.message.answer(
         "Выберите действие:",
         reply_markup=start_keyboard_inline)
 
