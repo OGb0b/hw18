@@ -48,7 +48,6 @@ async def show_notes(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
     user_id = cb.from_user.id
     note = load_data()
-    # Здесь должен быть код для получения заметок из БД/хранилища
     if not note[user_id]:
         await cb.message.answer("📭 У вас пока нет заметок.")
     else:
@@ -79,7 +78,7 @@ async def select_notes_to_delete(cb: CallbackQuery, state: FSMContext):
         if len(words) > 3:
             note_preview += "..."
 
-        # Добавляем кнопку (индекс в callback_data делаем 0-based)
+
         buttons.append(
             InlineKeyboardButton(
                 text=f"{index}. {note_preview}",
@@ -89,7 +88,7 @@ async def select_notes_to_delete(cb: CallbackQuery, state: FSMContext):
         buttons.append(
             InlineKeyboardButton(
                 text=f"{index + 1}. {note_preview}",
-                callback_data=f"delete_note_{index}"  # Сохраняем индекс в формате "delete_note_0"
+                callback_data=f"delete_note_{index}"
             )
         )
 
@@ -111,7 +110,7 @@ async def confirm_note_deletion(cb: CallbackQuery, state: FSMContext):
 
         note_index = int(cb.data.split('_')[-1])
         if 0 <= note_index < len(user_notes):
-            deleted_note = note[user_id].pop(note_index)  # Удаляем выбранную заметку
+            deleted_note = note[user_id].pop(note_index)
             save_data(note)
             await cb.message.answer(f"🗑 Заметка удалена:\n{deleted_note}")
         else:
@@ -120,7 +119,6 @@ async def confirm_note_deletion(cb: CallbackQuery, state: FSMContext):
     except (ValueError, IndexError):
         await cb.message.answer("⚠ Ошибка при обработке запроса")
 
-    # Всегда возвращаемся в начальное состояние после одного удаления
     await state.set_state(NoteStates.Start)
     await cb.answer()
     await cb.message.answer(
