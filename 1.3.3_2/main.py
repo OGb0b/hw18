@@ -10,7 +10,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from handlers import user_handler
 
-TOKEN = "7714704448:AAG-vX5NOkRbr9dGp4LLthTfTojqzb1tCTM"
+TOKEN = os.getenv("TOKEN")
 dp = Dispatcher(storage=MemoryStorage())
 dp.include_router(user_handler.router)
 
